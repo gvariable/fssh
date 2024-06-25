@@ -1,0 +1,27 @@
+workspace = { members = ["ssh-pty"] }
+[package]
+name = "fssh"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+crossterm = "0.27.0"
+ratatui = "0.26.0"
+color-eyre = "0.6"
+regex = "1.10"
+dirs = "4"
+ssh2 = "0.9"
+glob = "0.3"
+ssh2-config = "0.2.3"
+whoami = "1.5.1"
+tui-input = "0.8.0"
+tui = "0.19.0"
+fuzzy-matcher = "*"
+
+unicode-width = "0.1.12"
+
+
+[dev-dependencies]
+cargo-generate-rpm = "0.14.0"
