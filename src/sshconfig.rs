@@ -1,7 +1,8 @@
+use serde::{Deserialize, Serialize};
 use ssh2_config::{ParseRule, SshConfig};
 use whoami::username;
 
-#[derive(Clone, Debug)]
+#[derive(Deserialize, Serialize, Clone, Debug, Hash, PartialEq, Eq)]
 pub struct SshConfigItem {
     pub host: String,
     pub user: String,

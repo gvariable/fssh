@@ -27,7 +27,6 @@ enum Mode {
 pub struct App {
     pub data: Vec<SshConfigItem>,
     state: TableState,
-    connect_to: Option<SshConfigItem>,
     longest_item_lens: (u16, u16, u16), // order is (host, user, hostname)
     displayed_rows: usize,
     input_buffer: InputBuffer,
@@ -53,14 +52,17 @@ impl App {
             ),
             displayed_rows: data.len(),
             state: TableState::default().with_selected(0),
-            connect_to: None,
             input_buffer: InputBuffer::new(SEARCH_SYMBOL.to_string()),
             mode: Mode::Normal,
             data,
         }
     }
 
-    pub fn run(&mut self, terminal: &mut CustomTerminal<impl Write>) -> io::Result<()> {
+    pub fn select(
+        &mut self,
+        terminal: &mut CustomTerminal<impl Write>,
+    ) -> io::Result<Option<SshConfigItem>> {
+        let mut selected: Option<SshConfigItem> = None;
         loop {
             self.draw(terminal)?;
             if let Event::Key(key) = event::read()? {
@@ -73,8 +75,7 @@ impl App {
                         if self.state.selected().is_none() {
                             continue;
                         } else {
-                            self.connect_to =
-                                self.data.get(self.state.selected().unwrap()).cloned();
+                            selected = self.data.get(self.state.selected().unwrap()).cloned();
                             // clear the current buffer
                             terminal.clear()?;
                             break;
@@ -109,7 +110,7 @@ impl App {
                 }
             }
         }
-        Result::Ok(())
+        Result::Ok(selected)
     }
 
     pub fn draw(&mut self, terminal: &mut CustomTerminal<impl Write>) -> io::Result<()> {
@@ -317,15 +318,17 @@ impl App {
         spans
     }
 
-    pub fn connect(&self) -> Result<(), Box<dyn Error>> {
-        // TODO(gpl): pty support
-        // TODO(gpl): status code
-        if let Some(data) = &self.connect_to {
-            Command::new("ssh")
-                .arg(format!("{}@{}", data.user, data.host))
-                .spawn()?
-                .wait()?;
-        }
-        Result::Ok(())
+    pub fn connect(
+        &self,
+        hint: &SshConfigItem,
+        passwd: Option<String>,
+    ) -> Result<Option<String>, Box<dyn Error>> {
+        let passwd = String::from("password");
+        Command::new("ssh")
+            .arg(format!("{}@{}", hint.user, hint.host))
+            .spawn()?
+            .wait()?;
+
+        Result::Ok(Some(passwd))
     }
 }
