@@ -1,5 +1,6 @@
 mod app;
 mod db;
+mod encrypt;
 mod input;
 mod pty;
 mod select_box;
@@ -8,6 +9,7 @@ mod terminal;
 
 pub use app::App;
 pub use db::Db;
+pub use encrypt::EncryptionManager;
 pub use pty::{CommandBuilder, PseudoTerminal};
 pub use select_box::SelectBox;
 pub use sshconfig::*;

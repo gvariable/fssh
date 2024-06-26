@@ -1,9 +1,13 @@
 use crate::pty::Size;
 use crate::{
     select_box::SelectBox, sshconfig::SshConfigItem, terminal::Terminal, CommandBuilder, Db,
-    PseudoTerminal,
+    EncryptionManager, PseudoTerminal,
 };
 use std::error::Error;
+
+const KEY_FILE: &str = "key";
+const DB_FILE: &str = "db";
+pub const CRATE_NAME: &str = env!("CARGO_PKG_NAME");
 
 pub struct App {
     select_box: SelectBox,
@@ -24,23 +28,25 @@ impl App {
 
     pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
         if let Some(item) = self.select()? {
-            let path = dirs::config_dir().unwrap().join("fssh").join("db");
-            if let Some(parent) = path.parent() {
+            let db_path = dirs::config_dir().unwrap().join(CRATE_NAME).join(DB_FILE);
+            let key_path = dirs::config_dir().unwrap().join(CRATE_NAME).join(KEY_FILE);
+
+            if let Some(parent) = db_path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
 
-            println!("db path: {:?}", path);
-            let mut db: Db<SshConfigItem, String> = Db::open(path)?;
+            let mut db: Db<SshConfigItem, Vec<u8>> = Db::open(db_path)?;
+            let manager = EncryptionManager::new(key_path)?;
 
             let passwd = if let Some(passwd) = db.get(&item) {
-                self.connect(&item, Some(passwd.clone()))?
+                let passwd = manager.decrypt(&passwd);
+                self.connect(&item, Some(String::from_utf8(passwd)?))?
             } else {
                 self.connect(&item, None)?
             };
 
-            println!("get passwd: {:?}", passwd);
             if let Some(passwd) = passwd {
-                db.insert(item, passwd);
+                db.insert(item, manager.encrypt(passwd.as_bytes()));
                 db.flush()?;
             }
         }
