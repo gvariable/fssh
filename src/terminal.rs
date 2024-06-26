@@ -1,12 +1,15 @@
 use std::{
+    error::Error,
     io::{stdout, Stdout, Write},
     ops::{Deref, DerefMut},
 };
 
-use color_eyre::{config::HookBuilder, eyre::Ok};
-use crossterm::terminal::{disable_raw_mode, enable_raw_mode};
+use crossterm::{
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, Clear, EnterAlternateScreen},
+};
 
-use ratatui::{self, backend::CrosstermBackend, TerminalOptions, Viewport};
+use ratatui::{self, backend::CrosstermBackend};
 
 type TerminalBackend<W> = ratatui::Terminal<CrosstermBackend<W>>;
 
@@ -15,33 +18,20 @@ pub struct Terminal<W: Write> {
 }
 
 impl Terminal<Stdout> {
-    pub fn new(height: u16) -> color_eyre::Result<Self> {
+    pub fn new() -> Result<Self, Box<dyn Error>> {
         enable_raw_mode()?;
+        let mut stdout = stdout();
+        execute!(
+            stdout,
+            EnterAlternateScreen,
+            Clear(crossterm::terminal::ClearType::All)
+        )?;
 
-        init_error_hooks()?;
-        let backend = CrosstermBackend::new(stdout());
-        let options = TerminalOptions {
-            viewport: Viewport::Inline(height),
-        };
-        let terminal = ratatui::Terminal::with_options(backend, options)?;
-        Ok(Self { inner: terminal })
+        let backend = CrosstermBackend::new(stdout);
+        let terminal = ratatui::Terminal::new(backend)?;
+
+        Result::Ok(Self { inner: terminal })
     }
-}
-
-fn init_error_hooks() -> color_eyre::Result<()> {
-    let (panic, error) = HookBuilder::default().into_hooks();
-    let panic = panic.into_panic_hook();
-    let error = error.into_eyre_hook();
-    color_eyre::eyre::set_hook(Box::new(move |e| {
-        let _ = restore_terminal();
-        error(e)
-    }))?;
-    std::panic::set_hook(Box::new(move |info| {
-        let _ = restore_terminal();
-        panic(info);
-    }));
-
-    Ok(())
 }
 
 impl<W: Write> Deref for Terminal<W> {
@@ -65,6 +55,8 @@ impl<W: Write> Drop for Terminal<W> {
 }
 
 fn restore_terminal() -> color_eyre::Result<()> {
+    let mut stdout = stdout();
+    execute!(stdout, EnterAlternateScreen)?;
     disable_raw_mode()?;
     Ok(())
 }
