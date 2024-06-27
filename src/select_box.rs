@@ -28,7 +28,8 @@ pub struct SelectBox {
     data: Vec<SshConfigItem>,
     state: TableState,
     longest_item_lens: (u16, u16, u16), // order is (host, user, hostname)
-    displayed_rows: usize,
+    selected: usize,
+    filtered_data: Vec<SshConfigItem>,
     input_buffer: InputBuffer,
     mode: Mode,
 }
@@ -56,7 +57,8 @@ impl SelectBox {
                     .max()
                     .unwrap_or(0) as u16,
             ),
-            displayed_rows: data.len(),
+            selected: data.len(),
+            filtered_data: data.clone(),
             state: TableState::default().with_selected(0),
             input_buffer: InputBuffer::new(SEARCH_SYMBOL.to_string()),
             mode: Mode::Normal,
@@ -83,7 +85,10 @@ impl SelectBox {
                             continue;
                         } else {
                             // The unwrap is safe because we checked if the selected index is None.
-                            selected = self.data.get(self.state.selected().unwrap()).cloned();
+                            selected = self
+                                .filtered_data
+                                .get(self.state.selected().unwrap())
+                                .cloned();
                             // clear the current buffer
                             terminal.clear()?;
                             break;
@@ -138,6 +143,7 @@ impl SelectBox {
 
         // if the input buffer is empty, show all the data
         let rows: Vec<_> = if self.input_buffer.input.value().is_empty() {
+            self.filtered_data = self.data.clone();
             self.data
                 .iter()
                 .map(|d| {
@@ -151,6 +157,7 @@ impl SelectBox {
         } else {
             // if the input buffer is not empty, show the filtered and highlighted data
             let matches = self.fuzzy_match();
+            self.filtered_data = matches.iter().map(|(config, _)| config.clone()).collect();
             matches
                 .iter()
                 .map(|(config, indices)| {
@@ -171,7 +178,7 @@ impl SelectBox {
                 .collect()
         };
 
-        self.displayed_rows = rows.len();
+        self.selected = rows.len();
 
         let table = Table::new(
             rows,
@@ -228,7 +235,7 @@ impl SelectBox {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.displayed_rows - 1
+                    self.selected - 1
                 } else {
                     i - 1
                 }
@@ -241,7 +248,7 @@ impl SelectBox {
     fn down(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.displayed_rows - 1 {
+                if i >= self.selected - 1 {
                     0
                 } else {
                     i + 1
@@ -253,10 +260,10 @@ impl SelectBox {
     }
 
     // return order: host, user, hostname
-    fn fuzzy_match(&self) -> Vec<(&SshConfigItem, [Vec<usize>; 3])> {
+    fn fuzzy_match(&self) -> Vec<(SshConfigItem, [Vec<usize>; 3])> {
         let matcher = SkimMatcherV2::default();
         let pattern = self.input_buffer.input.value();
-        let choices: Vec<(&SshConfigItem, [Vec<usize>; 3])> = self
+        let choices: Vec<(SshConfigItem, [Vec<usize>; 3])> = self
             .data
             .iter()
             .filter_map(|config| {
@@ -283,7 +290,7 @@ impl SelectBox {
                     return None;
                 } else {
                     return Some((
-                        config,
+                        config.clone(),
                         [
                             host_matched_indices,
                             user_matched_indices,
