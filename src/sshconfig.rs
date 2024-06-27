@@ -3,12 +3,17 @@ use ssh2_config::{ParseRule, SshConfig};
 use whoami::username;
 
 #[derive(Deserialize, Serialize, Clone, Debug, Hash, PartialEq, Eq)]
+/// Key elements of an SSH configuration.
 pub struct SshConfigItem {
+    /// Alias name in the configuration.
     pub host: String,
+    /// User name.
     pub user: String,
+    /// IP or DNS.
     pub hostname: String,
 }
 
+/// Reads the default SSH configuration file and retrieves a list of [`SshConfigItem`].
 pub fn retrive_ssh_configs() -> Result<Vec<SshConfigItem>, Box<dyn std::error::Error>> {
     let config = SshConfig::parse_default_file(ParseRule::STRICT)?;
 

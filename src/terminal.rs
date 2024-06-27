@@ -12,12 +12,19 @@ use ratatui::{self, backend::CrosstermBackend};
 
 type TerminalBackend<W> = ratatui::Terminal<CrosstermBackend<W>>;
 
+/// A low level terminal for actual frame rendering.
 pub struct Terminal<W: Write> {
     inner: TerminalBackend<W>,
     alternate_screen: bool,
 }
 
 impl Terminal<Stdout> {
+    /// Creates a [`Terminal`] instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `height` - An optional height of the terminal. If provided, the terminal is inlined with the given height.
+    /// * `alternate_screen` - Whether to run the terminal in an alternate screen.
     pub fn new(height: Option<u16>, alternate_screen: bool) -> anyhow::Result<Self> {
         enable_raw_mode()?;
         let mut stdout = stdout();

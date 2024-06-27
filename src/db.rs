@@ -9,6 +9,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// A simple key-value store that serializes to disk.
 #[derive(Debug)]
 pub struct Db<K, V> {
     path: PathBuf,
@@ -20,6 +21,10 @@ where
     K: Hash + Eq + Serialize + for<'de> Deserialize<'de> + Debug,
     V: Serialize + for<'de> Deserialize<'de> + Debug,
 {
+    /// Opens a database from a given file.
+    ///
+    /// If the file doesn't exist, an empty database is created.
+    /// If the file exists, the database is loaded from the file.
     pub fn open<P: AsRef<Path>>(path: P) -> anyhow::Result<Self> {
         let path = PathBuf::from(path.as_ref());
         let db = if path.exists() {
@@ -32,6 +37,7 @@ where
         Ok(Self { path, db })
     }
 
+    /// Flushes the database to disk.
     pub fn flush(&self) -> anyhow::Result<()> {
         let data = bincode::serialize(&self.db)?;
         let mut file = OpenOptions::new()

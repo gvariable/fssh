@@ -39,6 +39,7 @@ impl Size {
     }
 }
 
+/// A pseudo terminal that spawns an SSH client and captures the password.
 pub struct PseudoTerminal {
     parser: Arc<RwLock<Parser>>,
     sender: Sender<Bytes>,
@@ -48,6 +49,24 @@ pub struct PseudoTerminal {
 }
 
 impl PseudoTerminal {
+    /// Creates a [`PseudoTerminal`] instance.
+    ///
+    /// This function opens a pseudo terminal (pty), spawns an SSH client in the slave pty, and
+    /// manages communication between the master and slave pty. The master pty reads output from
+    /// the slave pty and writes input to the slave pty. It attempts to connect to the SSH server
+    /// using the provided password (if applicable). If the connection is successful, it sends the
+    /// output for rendering; otherwise, it prompts the user to input the password and memorizes it.
+    ///
+    /// # Arguments
+    ///
+    /// * `size` - The size of the terminal (rows and columns).
+    /// * `cmd` - The command to be executed in the pseudo terminal.
+    /// * `passwd` - An optional password that may be used by the SSH client.
+    ///
+    /// # Returns
+    ///
+    /// This function returns a `Result` containing the newly created [`PseudoTerminal`] instance,
+    /// or an error if the creation failed.
     pub fn new(
         size: Size,
         cmd: CommandBuilder,
@@ -228,6 +247,7 @@ impl PseudoTerminal {
         Ok(true)
     }
 
+    /// Renders the output from the slave pty, processes input from the keyboard, and searches for the password when the pty exits.
     pub async fn run(
         &mut self,
         terminal: &mut Terminal<impl Write>,

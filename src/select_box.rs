@@ -23,8 +23,9 @@ enum Mode {
     Search,
 }
 
+/// An TUI interface to select SSH configuration items.
 pub struct SelectBox {
-    pub data: Vec<SshConfigItem>,
+    data: Vec<SshConfigItem>,
     state: TableState,
     longest_item_lens: (u16, u16, u16), // order is (host, user, hostname)
     displayed_rows: usize,
@@ -33,6 +34,12 @@ pub struct SelectBox {
 }
 
 impl SelectBox {
+    /// Returns the nums of inner items.
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    /// Creates an instance of [`SelectBox`].
     pub fn new(data: Vec<SshConfigItem>) -> Self {
         Self {
             longest_item_lens: (
@@ -57,6 +64,7 @@ impl SelectBox {
         }
     }
 
+    /// Renders the TUI and handles user inputs.
     pub fn select(
         &mut self,
         terminal: &mut Terminal<impl Write>,
@@ -113,7 +121,7 @@ impl SelectBox {
         Result::Ok(selected)
     }
 
-    pub fn draw(&mut self, terminal: &mut Terminal<impl Write>) -> anyhow::Result<()> {
+    fn draw(&mut self, terminal: &mut Terminal<impl Write>) -> anyhow::Result<()> {
         terminal.draw(|frame| {
             self.ui(frame);
         })?;
