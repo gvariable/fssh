@@ -1,5 +1,4 @@
-use std::io::Write;
-use std::{error::Error, io, process::Command};
+use std::io::{self, Write};
 
 use crate::input::InputBuffer;
 use crate::sshconfig::SshConfigItem;
@@ -316,19 +315,5 @@ impl SelectBox {
         }
 
         spans
-    }
-
-    pub fn connect(
-        &self,
-        hint: &SshConfigItem,
-        passwd: Option<String>,
-    ) -> Result<Option<String>, Box<dyn Error>> {
-        let passwd = String::from("password");
-        Command::new("ssh")
-            .arg(format!("{}@{}", hint.user, hint.host))
-            .spawn()?
-            .wait()?;
-
-        Result::Ok(Some(passwd))
     }
 }
