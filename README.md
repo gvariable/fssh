@@ -23,26 +23,30 @@ A CLI tool for quickly connecting to SSH servers with an intuitive TUI interface
 
 ![Demo](./demo.gif)
 
+Require password entry only **once**!
+
 ## Features
 
-- Intuitive TUI interface for selecting and searching from a large list of SSH servers.
-- Automatically memorizes and encrypts passwords, requiring password entry only once.
+- Intuitive TUI interface for **selecting and searching** from a large list of SSH servers.
+- Automatically **memorizes** and encrypts passwords, requiring password entry only **once**.
 
-## Usage
+## Installation
+
+No release is available yet, so you will need to download and compile the project manually.
 
 ```shell
-$ fssh
+git clone https://github.com/gvariable/fssh.git
+cd fssh
+cargo run
 ```
-
-
 
 ## How It Works
 
 1. `fssh` parses your `~/.ssh/config` file and lists all the hosts.
 2. Users can search for and select the host they want to connect to.
 3. `fssh` spawns a new TTY and runs the SSH client to connect to the chosen host.
-4. If the host requires a password, `fssh` will memorize and encrypt it locally. The next time the user connects to the same host, they won't need to enter the password again.
+4. If the host requires a password, `fssh` will memorize and encrypt it locally. The default configuration location is `~/Library/Application Support/fssh` on macOS and `~/.config/fssh` on Linux. The next time the user connects to the same host, they won't need to enter the password again.
 5. If the host doesn't require a password, `fssh` will connect directly.
 
-
-Feel free to contribute to the project by opening issues or submitting pull requests. We appreciate your feedback and help to improve `fssh`.
+## Known issues
+The pseudo terminal currently does not support scrollback, so users cannot view the command history. 
