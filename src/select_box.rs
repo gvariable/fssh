@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::Write;
 
 use crate::input::InputBuffer;
 use crate::sshconfig::SshConfigItem;
@@ -60,7 +60,7 @@ impl SelectBox {
     pub fn select(
         &mut self,
         terminal: &mut Terminal<impl Write>,
-    ) -> io::Result<Option<SshConfigItem>> {
+    ) -> anyhow::Result<Option<SshConfigItem>> {
         let mut selected: Option<SshConfigItem> = None;
         loop {
             self.draw(terminal)?;
@@ -74,6 +74,7 @@ impl SelectBox {
                         if self.state.selected().is_none() {
                             continue;
                         } else {
+                            // The unwrap is safe because we checked if the selected index is None.
                             selected = self.data.get(self.state.selected().unwrap()).cloned();
                             // clear the current buffer
                             terminal.clear()?;
@@ -112,7 +113,7 @@ impl SelectBox {
         Result::Ok(selected)
     }
 
-    pub fn draw(&mut self, terminal: &mut Terminal<impl Write>) -> io::Result<()> {
+    pub fn draw(&mut self, terminal: &mut Terminal<impl Write>) -> anyhow::Result<()> {
         terminal.draw(|frame| {
             self.ui(frame);
         })?;

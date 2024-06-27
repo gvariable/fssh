@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    error::Error,
     fmt::Debug,
     fs::{File, OpenOptions},
     hash::Hash,
@@ -21,7 +20,7 @@ where
     K: Hash + Eq + Serialize + for<'de> Deserialize<'de> + Debug,
     V: Serialize + for<'de> Deserialize<'de> + Debug,
 {
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, Box<dyn Error>> {
+    pub fn open<P: AsRef<Path>>(path: P) -> anyhow::Result<Self> {
         let path = PathBuf::from(path.as_ref());
         let db = if path.exists() {
             let file = File::open(&path)?;
@@ -33,8 +32,7 @@ where
         Ok(Self { path, db })
     }
 
-    pub fn flush(&self) -> Result<(), Box<dyn Error>> {
-        println!("flushing db: {:?} into {:?}", &self.db, &self.path);
+    pub fn flush(&self) -> anyhow::Result<()> {
         let data = bincode::serialize(&self.db)?;
         let mut file = OpenOptions::new()
             .write(true)

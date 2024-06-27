@@ -3,7 +3,6 @@ use crate::{
     select_box::SelectBox, sshconfig::SshConfigItem, terminal::Terminal, CommandBuilder, Db,
     EncryptionManager, PseudoTerminal,
 };
-use std::error::Error;
 
 const KEY_FILE: &str = "key";
 const DB_FILE: &str = "db";
@@ -20,13 +19,13 @@ impl App {
         }
     }
 
-    fn select(&mut self) -> Result<Option<SshConfigItem>, Box<dyn Error>> {
+    fn select(&mut self) -> anyhow::Result<Option<SshConfigItem>> {
         let mut terminal = Terminal::new(Some(self.select_box.data.len() as u16 + 5), false)?;
         let selected = self.select_box.select(&mut terminal)?;
         Result::Ok(selected)
     }
 
-    pub fn run(&mut self) -> Result<(), Box<dyn Error>> {
+    pub fn run(&mut self) -> anyhow::Result<()> {
         if let Some(item) = self.select()? {
             let db_path = dirs::config_dir().unwrap().join(CRATE_NAME).join(DB_FILE);
             let key_path = dirs::config_dir().unwrap().join(CRATE_NAME).join(KEY_FILE);
@@ -39,14 +38,14 @@ impl App {
             let manager = EncryptionManager::new(key_path)?;
 
             let passwd = if let Some(passwd) = db.get(&item) {
-                let passwd = manager.decrypt(&passwd);
+                let passwd = manager.decrypt(&passwd)?;
                 self.connect(&item, Some(String::from_utf8(passwd)?))?
             } else {
                 self.connect(&item, None)?
             };
 
             if let Some(passwd) = passwd {
-                db.insert(item, manager.encrypt(passwd.as_bytes()));
+                db.insert(item, manager.encrypt(passwd.as_bytes())?);
                 db.flush()?;
             }
         }
@@ -58,7 +57,7 @@ impl App {
         &self,
         hint: &SshConfigItem,
         passwd: Option<String>,
-    ) -> Result<Option<String>, Box<dyn Error>> {
+    ) -> anyhow::Result<Option<String>> {
         let mut terminal = Terminal::new(None, true)?;
         let mut cmd = CommandBuilder::new("ssh");
         cmd.arg(&hint.host);
@@ -67,9 +66,9 @@ impl App {
 
         let rt = tokio::runtime::Runtime::new()?;
         let passwd = rt.block_on(async move {
-            let mut pty = PseudoTerminal::new(size, cmd, passwd);
+            let mut pty = PseudoTerminal::new(size, cmd, passwd)?;
             pty.run(&mut terminal).await
-        });
+        })?;
 
         Result::Ok(passwd)
     }

@@ -1,5 +1,4 @@
 use std::{
-    error::Error,
     io::{stdout, Stdout, Write},
     ops::{Deref, DerefMut},
 };
@@ -19,7 +18,7 @@ pub struct Terminal<W: Write> {
 }
 
 impl Terminal<Stdout> {
-    pub fn new(height: Option<u16>, alternate_screen: bool) -> Result<Self, Box<dyn Error>> {
+    pub fn new(height: Option<u16>, alternate_screen: bool) -> anyhow::Result<Self> {
         enable_raw_mode()?;
         let mut stdout = stdout();
 
@@ -66,7 +65,7 @@ impl<W: Write> Drop for Terminal<W> {
     }
 }
 
-fn restore_terminal(alternate_screen: bool) -> Result<(), Box<dyn Error>> {
+fn restore_terminal(alternate_screen: bool) -> anyhow::Result<()> {
     if alternate_screen {
         execute!(stdout(), LeaveAlternateScreen)?;
     }

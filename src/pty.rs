@@ -1,11 +1,11 @@
 use std::{
-    error::Error,
     io::Write,
     sync::{atomic::AtomicBool, Mutex},
     thread::sleep,
     time::Duration,
 };
 
+use anyhow::Ok;
 pub use portable_pty::CommandBuilder;
 use portable_pty::{native_pty_system, MasterPty, PtySize};
 use std::sync::{Arc, RwLock};
@@ -48,26 +48,29 @@ pub struct PseudoTerminal {
 }
 
 impl PseudoTerminal {
-    pub fn new(size: Size, cmd: CommandBuilder, mut passwd: Option<String>) -> Self {
+    pub fn new(
+        size: Size,
+        cmd: CommandBuilder,
+        mut passwd: Option<String>,
+    ) -> anyhow::Result<Self> {
         let pty_system = native_pty_system();
-        let pty_pair = pty_system
-            .openpty(PtySize {
-                rows: size.rows,
-                cols: size.cols,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .unwrap();
+        let pty_pair = pty_system.openpty(PtySize {
+            rows: size.rows,
+            cols: size.cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        })?;
 
         let parser = Arc::new(RwLock::new(Parser::new(size.rows, size.cols, 1000)));
 
         let terminate = Arc::new(AtomicBool::new(false));
         {
             // Spawning a new thread to run the command
-            spawn_blocking(move || {
-                let mut child = pty_pair.slave.spawn_command(cmd).unwrap();
+            spawn_blocking(move || -> anyhow::Result<()> {
+                let mut child = pty_pair.slave.spawn_command(cmd)?;
                 let _ = child.wait();
                 drop(pty_pair.slave);
+                Ok(())
             });
         }
 
@@ -83,13 +86,13 @@ impl PseudoTerminal {
             let buffer = buffer.clone();
             let tx = tx.clone();
 
-            spawn_blocking(move || {
+            spawn_blocking(move || -> anyhow::Result<()> {
                 let mut buf = [0; 1024];
                 let mut send_passwd = false;
                 let mut validate_passwd = false;
 
                 loop {
-                    let n = reader.read(&mut buf).unwrap();
+                    let n = reader.read(&mut buf)?;
                     if n == 0 {
                         break;
                     }
@@ -97,9 +100,9 @@ impl PseudoTerminal {
                     let string = String::from_utf8_lossy(&buf[..n]);
 
                     if passwd.is_some() && string.contains("assword: ") {
+                        // the unwrap is safe here because we have already checked
                         let passwd = passwd.take().unwrap();
-                        tx.blocking_send(Bytes::from(format!("{}\n", passwd)))
-                            .unwrap();
+                        tx.blocking_send(Bytes::from(format!("{}\n", passwd)))?;
                         send_passwd = true;
                     } else {
                         if send_passwd && !validate_passwd {
@@ -109,7 +112,9 @@ impl PseudoTerminal {
                             }
 
                             validate_passwd = true;
-                            let mut parser = parser.write().unwrap();
+                            let mut parser = parser.write().map_err(|_| {
+                                anyhow::anyhow!("Failed to acquire write lock of Parser.")
+                            })?;
                             if string.contains("ermission denied") {
                                 parser.process(&Bytes::from(format!(
                                     "\x1b[1;4mCached password is outdated, please input it again.\x1b[0m\n"
@@ -118,12 +123,16 @@ impl PseudoTerminal {
                                 parser.process(&buf[..n]);
                             }
                         } else {
-                            let mut parser = parser.write().unwrap();
+                            let mut parser = parser.write().map_err(|_| {
+                                anyhow::anyhow!("Failed to acquire write lock of Parser.")
+                            })?;
                             parser.process(&buf[..n]);
                         }
                     }
 
-                    let mut buffer = buffer.lock().unwrap();
+                    let mut buffer = buffer
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("Failed to acquire lock of buffer."))?;
                     if buffer.len() < 1024 {
                         buffer.push_str(&string);
                     }
@@ -132,6 +141,7 @@ impl PseudoTerminal {
                 // wait for a while before rendering the remaining data
                 sleep(Duration::from_millis(10));
                 terminate.store(true, std::sync::atomic::Ordering::Relaxed);
+                Ok(())
             });
         }
 
@@ -140,27 +150,31 @@ impl PseudoTerminal {
             let buffer = buffer.clone();
             tokio::spawn(async move {
                 while let Some(data) = rx.recv().await {
-                    writer.write_all(&data).unwrap();
-                    writer.flush().unwrap();
+                    writer.write_all(&data)?;
+                    writer.flush()?;
 
-                    let mut buffer = buffer.lock().unwrap();
+                    let mut buffer = buffer
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("Failed to acquire lock of buffer."))?;
+
                     if buffer.len() < 4096 {
                         buffer.push_str(String::from_utf8_lossy(&data).as_ref());
                     }
                 }
+                Ok(())
             });
         }
 
-        Self {
+        Ok(Self {
             parser: parser,
             sender: tx,
             master: pty_pair.master,
             terminate,
             buffer: buffer,
-        }
+        })
     }
 
-    async fn handle_key_event(&mut self, key: &KeyEvent) -> Result<bool, Box<dyn Error>> {
+    async fn handle_key_event(&mut self, key: &KeyEvent) -> anyhow::Result<bool> {
         let input_bytes = match key.code {
             KeyCode::Char(ch) => {
                 let mut send = ch.to_string().into_bytes();
@@ -214,8 +228,11 @@ impl PseudoTerminal {
         Ok(true)
     }
 
-    pub async fn run(&mut self, terminal: &mut Terminal<impl Write>) -> Option<String> {
-        let terminal_size = terminal.size().unwrap();
+    pub async fn run(
+        &mut self,
+        terminal: &mut Terminal<impl Write>,
+    ) -> anyhow::Result<Option<String>> {
+        let terminal_size = terminal.size()?;
         let mut size = Size {
             rows: terminal_size.height,
             cols: terminal_size.width,
@@ -226,33 +243,42 @@ impl PseudoTerminal {
                 break;
             }
 
-            terminal
-                .draw(|frame| {
-                    let parser = self.parser.read().unwrap();
-                    let screen = parser.screen();
-                    let block = Block::default().style(Style::default().bg(Color::Black));
+            terminal.draw(|frame| {
+                let parser = self
+                    .parser
+                    .read()
+                    .map_err(|_| anyhow::anyhow!("Failed to acquire read lock of Parser."))
+                    .unwrap();
 
-                    let cursor = Cursor::default().visibility(true);
-                    // Style
-                    let pseudo_term = PseudoTerminalWidget::new(screen)
-                        .block(block)
-                        .cursor(cursor);
+                let screen = parser.screen();
+                let block = Block::default().style(Style::default().bg(Color::Black));
 
-                    let rect = Rect::new(0, 0, size.cols, size.rows);
-                    frame.render_widget(pseudo_term, rect);
-                })
-                .unwrap();
+                let cursor = Cursor::default().visibility(true);
+                // Style
+                let pseudo_term = PseudoTerminalWidget::new(screen)
+                    .block(block)
+                    .cursor(cursor);
 
-            if event::poll(Duration::from_millis(10)).unwrap() {
-                match event::read().unwrap() {
+                let rect = Rect::new(0, 0, size.cols, size.rows);
+                frame.render_widget(pseudo_term, rect);
+            })?;
+
+            if event::poll(Duration::from_millis(10))? {
+                match event::read()? {
                     Event::FocusLost => {}
                     Event::Key(key) => {
-                        self.handle_key_event(&key).await.unwrap();
+                        self.handle_key_event(&key).await?;
                     }
                     Event::Resize(cols, rows) => {
                         size.rows = rows;
                         size.cols = cols;
-                        self.parser.write().unwrap().set_size(rows, cols);
+                        self.parser
+                            .write()
+                            .map_err(|_| {
+                                anyhow::anyhow!("Failed to acquire write lock of Parser.")
+                            })?
+                            .set_size(rows, cols);
+
                         self.master
                             .resize(PtySize {
                                 rows: rows,
@@ -282,6 +308,6 @@ impl PseudoTerminal {
             }
         }
 
-        passwd
+        Ok(passwd)
     }
 }
