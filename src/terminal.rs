@@ -6,7 +6,9 @@ use std::{
 
 use crossterm::{
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, Clear, EnterAlternateScreen},
+    terminal::{
+        disable_raw_mode, enable_raw_mode, Clear, EnterAlternateScreen, LeaveAlternateScreen,
+    },
 };
 
 use ratatui::{self, backend::CrosstermBackend};
@@ -15,22 +17,32 @@ type TerminalBackend<W> = ratatui::Terminal<CrosstermBackend<W>>;
 
 pub struct Terminal<W: Write> {
     inner: TerminalBackend<W>,
+    alternate_screen: bool,
 }
 
 impl Terminal<Stdout> {
-    pub fn new() -> Result<Self, Box<dyn Error>> {
+    pub fn new(height: Option<u16>, alternate_screen: bool) -> Result<Self, Box<dyn Error>> {
         enable_raw_mode()?;
         let mut stdout = stdout();
-        execute!(
-            stdout,
-            EnterAlternateScreen,
-            Clear(crossterm::terminal::ClearType::All)
-        )?;
+
+        if alternate_screen {
+            execute!(stdout, EnterAlternateScreen)?;
+        }
 
         let backend = CrosstermBackend::new(stdout);
-        let terminal = ratatui::Terminal::new(backend)?;
+        let terminal = if let Some(height) = height {
+            let options = ratatui::TerminalOptions {
+                viewport: ratatui::Viewport::Inline(height),
+            };
+            ratatui::Terminal::with_options(backend, options)?
+        } else {
+            ratatui::Terminal::new(backend)?
+        };
 
-        Result::Ok(Self { inner: terminal })
+        Result::Ok(Self {
+            inner: terminal,
+            alternate_screen,
+        })
     }
 }
 
@@ -50,13 +62,16 @@ impl<W: Write> DerefMut for Terminal<W> {
 
 impl<W: Write> Drop for Terminal<W> {
     fn drop(&mut self) {
-        let _ = restore_terminal();
+        if let Err(err) = restore_terminal(self.alternate_screen) {
+            eprintln!("Failed to restore terminal: {}", err);
+        }
     }
 }
 
-fn restore_terminal() -> color_eyre::Result<()> {
-    let mut stdout = stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+fn restore_terminal(alternate_screen: bool) -> Result<(), Box<dyn Error>> {
+    if alternate_screen {
+        execute!(stdout(), LeaveAlternateScreen)?;
+    }
     disable_raw_mode()?;
     Ok(())
 }

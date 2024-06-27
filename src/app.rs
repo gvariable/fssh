@@ -21,7 +21,7 @@ impl App {
     }
 
     fn select(&mut self) -> Result<Option<SshConfigItem>, Box<dyn Error>> {
-        let mut terminal = Terminal::new()?;
+        let mut terminal = Terminal::new(Some(self.select_box.data.len() as u16 + 5), false)?;
         let selected = self.select_box.select(&mut terminal)?;
         Result::Ok(selected)
     }
@@ -59,7 +59,7 @@ impl App {
         hint: &SshConfigItem,
         passwd: Option<String>,
     ) -> Result<Option<String>, Box<dyn Error>> {
-        let mut terminal = Terminal::new()?;
+        let mut terminal = Terminal::new(None, true)?;
         let mut cmd = CommandBuilder::new("ssh");
         cmd.arg(&hint.host);
 
