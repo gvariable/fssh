@@ -21,14 +21,14 @@
 
 A CLI tool for quickly connecting to SSH servers with an intuitive TUI interface.
 
+![Demo](./demo.gif)
+
 ## Features
 
 - Intuitive TUI interface for selecting and searching from a large list of SSH servers.
 - Automatically memorizes and encrypts passwords, requiring password entry only once.
 
 ## Usage
-
-TODO
 
 ```shell
 $ fssh
